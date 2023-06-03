@@ -368,6 +368,15 @@
 									// We are handling saving ourselves. This action does not make sense.
 									return;
 								}
+								// 禁用Alt+方向键
+								if (
+									keyEvt.altKey &&
+									["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(
+										keyEvt.key
+									) !== -1
+								) {
+									return;
+								}
 
 								oldHandler(keyEvt);
 							};
