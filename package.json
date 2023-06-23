@@ -440,6 +440,7 @@
 		}
 	},
 	"scripts": {
+		"build-drawio": "cd drawio/etc/build && ant",
 		"run-script": "node ./scripts/run-script",
 		"lint": "yarn run-script check-version && prettier --check ./src",
 		"build": "yarn pre-build && vsce package --yarn --out ./vscode-drawio.vsix",

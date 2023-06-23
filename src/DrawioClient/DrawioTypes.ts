@@ -23,6 +23,11 @@ export type DrawioEvent =
 			message?: DrawioEvent;
 	  }
 	| {
+			event: "exportLibXml";
+			fileName: string;
+			xml: string;
+	  }
+	| {
 			event: "configure";
 	  };
 

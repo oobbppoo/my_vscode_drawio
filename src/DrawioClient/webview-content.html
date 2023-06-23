@@ -368,7 +368,22 @@
 									// We are handling saving ourselves. This action does not make sense.
 									return;
 								}
-
+								// 禁用Alt+方向键
+								if (
+									keyEvt.altKey &&
+									["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(
+										keyEvt.key
+									) !== -1
+								) {
+									return;
+								}
+								// 禁用ctrl+j
+								if (
+									keyEvt.ctrlKey &&
+									(keyEvt.key === "j" || keyEvt.key === "J")
+								) {
+									return;
+								}
 								oldHandler(keyEvt);
 							};
 						}

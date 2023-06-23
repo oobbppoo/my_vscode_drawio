@@ -19,6 +19,7 @@ import {
 	DrawioClientFactory,
 } from "./DrawioClient";
 import { registerFailableCommand } from "./utils/registerFailableCommand";
+import { basename } from "path";
 
 const drawioChangeThemeCommand = "hediet.vscode-drawio.changeTheme";
 
@@ -221,6 +222,10 @@ export class DrawioEditor {
 				this.drawioClient.triggerOnSave();
 			}
 		});
+
+		drawioClient.onExportLibXml.sub(({ fileName }) => {
+			this.handleLibXmlExport(fileName);
+		});
 	}
 
 	public get isActive(): boolean {
@@ -243,6 +248,13 @@ export class DrawioEditor {
 	public getUriWithExtension(newExtension: string): Uri {
 		return this.uri.with({
 			path: removeEnd(this.uri.path, this.fileExtension) + newExtension,
+		});
+	}
+
+	public getUriWithFileName(fileName: string): Uri {
+		return this.uri.with({
+			// 从当前文件路径中去掉文件名，然后加上新的文件名
+			path: removeEnd(this.uri.path, basename(this.uri.path)) + fileName,
 		});
 	}
 
@@ -331,6 +343,18 @@ export class DrawioEditor {
 			return;
 		}
 		await this.exportTo(result.label);
+	}
+
+	public async handleLibXmlExport(fileName: string): Promise<void> {
+		const buffer = await this.drawioClient.exportLibXml();
+		const targetUri = await window.showSaveDialog({
+			defaultUri: this.getUriWithFileName(fileName),
+		});
+
+		if (!targetUri) {
+			return;
+		}
+		await workspace.fs.writeFile(targetUri, buffer);
 	}
 
 	public async handleChangeThemeCommand(): Promise<void> {

@@ -4823,6 +4823,9 @@
 
 					a.click();
 					a.parentNode.removeChild(a);
+					var parent = window.opener || window.parent;
+					parent.postMessage(JSON.stringify({event: 'exportLibXml', fileName: filename,
+						xml: data}), '*');
 				}
 				catch (e)
 				{

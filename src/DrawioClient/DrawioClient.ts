@@ -27,8 +27,16 @@ export class DrawioClient<
 	}>();
 	public readonly onUnknownMessage = this.onUnknownMessageEmitter.asEvent();
 
+	private readonly onExportLibXmlEmitter = new EventEmitter<{
+		fileName: string;
+	}>();
+	public readonly onExportLibXml = this.onExportLibXmlEmitter.asEvent();
+
 	// This is always up to date, except directly after calling load.
 	private currentXml: string | undefined = undefined;
+
+	// 图形库的xml
+	private libXml: string = "";
 
 	private isMerging = false;
 
@@ -150,6 +158,9 @@ export class DrawioClient<
 				action: "configure",
 				config,
 			});
+		} else if (drawioEvt.event === "exportLibXml") {
+			this.libXml = drawioEvt.xml;
+			this.onExportLibXmlEmitter.emit({fileName: drawioEvt.fileName});
 		} else {
 			this.onUnknownMessageEmitter.emit({ message: drawioEvt });
 		}
@@ -209,6 +220,10 @@ export class DrawioClient<
 				`Invalid file extension "${extension}"! Only ".png", ".svg" and ".drawio" are supported.`
 			);
 		}
+	}
+
+	public async exportLibXml(): Promise<BufferImpl> {
+		return BufferImpl.from(this.libXml, "utf-8");
 	}
 
 	private async getXmlUncached(): Promise<string> {
