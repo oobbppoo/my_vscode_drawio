@@ -4903,16 +4903,8 @@
 	{
 		allowBrowser = (allowBrowser != null) ? allowBrowser : false;
 		allowTab = (allowTab != null) ? allowTab : (format != 'vsdx') && (!mxClient.IS_IOS || !navigator.standalone);
-		var count = this.getServiceCount(allowBrowser);
-		
-		if (isLocalStorage)
-		{
-			count++;
-		}
-		
-		var rowLimit = (count <= 4) ? 2 : (count > 6 ? 4 : 3);
-		
-		var dlg = new CreateDialog(this, filename, mxUtils.bind(this, function(newTitle, mode)
+
+		var saveFunction = mxUtils.bind(this, function(newTitle, mode, input, folderId)
 		{
 			try
 			{
@@ -4950,7 +4942,7 @@
 				} 
 				else if (newTitle != null && newTitle.length > 0)
 				{
-					this.pickFolder(mode, mxUtils.bind(this, function(folderId)
+					var saveFile = mxUtils.bind(this, function(folderId)
 					{
 						try
 						{
@@ -4960,21 +4952,71 @@
 						{
 							this.handleError(e);
 						}
-					}));
+					});
+
+					if (folderId != null)
+					{
+						saveFile(folderId);
+					}
+					else
+					{
+						this.pickFolder(mode, saveFile);
+					}
 				}
 			}
 			catch (e)
 			{
 				this.handleError(e);
 			}
-		}), mxUtils.bind(this, function()
+		});
+		
+		if (urlParams['save-dialog'] == '1')
 		{
-			this.hideDialog();
-		}), mxResources.get('saveAs'), mxResources.get('download'), false, allowBrowser, allowTab,
-			null, count > 1, rowLimit, data, mimeType, base64Encoded);
-		var height = (this.isServices(count)) ? ((count > rowLimit) ? 390 : 280) : 160;
-		this.showDialog(dlg.container, 420, height, true, true);
-		dlg.init();
+			var disabled = [];
+
+			if (!allowBrowser)
+			{
+				disabled.push(App.MODE_BROWSER);
+			}
+
+			if (!allowTab)
+			{
+				disabled.push('_blank');
+			}
+
+			var dlg = new SaveDialog(this, filename, mxUtils.bind(this, function(input, mode, folderId)
+			{
+				saveFunction(input.value, mode, input, folderId);
+				this.hideDialog();
+			}), disabled, data, mimeType, base64Encoded);
+
+			this.showDialog(dlg.container, 420, 100, true, false, mxUtils.bind(this, function()
+			{
+				this.hideDialog();
+			}));
+
+			dlg.init();
+		}
+		else
+		{
+			var count = this.getServiceCount(allowBrowser);
+			
+			if (isLocalStorage)
+			{
+				count++;
+			}
+			
+			var rowLimit = (count <= 4) ? 2 : (count > 6 ? 4 : 3);
+			
+			var dlg = new CreateDialog(this, filename, saveFunction, mxUtils.bind(this, function()
+			{
+				this.hideDialog();
+			}), mxResources.get('saveAs'), mxResources.get('download'), false, allowBrowser, allowTab,
+				null, count > 1, rowLimit, data, mimeType, base64Encoded);
+			var height = (this.isServices(count)) ? ((count > rowLimit) ? 390 : 280) : 160;
+			this.showDialog(dlg.container, 420, height, true, true);
+			dlg.init();
+		}
 	};
 	
 	/**
@@ -5308,16 +5350,8 @@
 	EditorUi.prototype.saveRequest = function(filename, format, fn, data, base64Encoded, mimeType, allowTab)
 	{
 		allowTab = (allowTab != null) ? allowTab : !mxClient.IS_IOS || !navigator.standalone;
-		var count = this.getServiceCount(false);
-		
-		if (isLocalStorage)
-		{
-			count++;
-		}
-		
-		var rowLimit = (count <= 4) ? 2 : (count > 6 ? 4 : 3);
-		
-		var dlg = new CreateDialog(this, filename, mxUtils.bind(this, function(newTitle, mode)
+
+		var saveFunction = mxUtils.bind(this, function(newTitle, mode, input, folderId)
 		{
 			if (mode == '_blank' || newTitle != null && newTitle.length > 0)
 			{
@@ -5332,7 +5366,7 @@
 					}
 					else
 					{
-						this.pickFolder(mode, mxUtils.bind(this, function(folderId)
+						var doSave = mxUtils.bind(this, function(folderId)
 						{
 							mimeType = (mimeType != null) ? mimeType : ((format == 'pdf') ?
 								'application/pdf' : 'image/' + format);
@@ -5379,19 +5413,64 @@
 									this.handleError(resp);
 								}));
 							}
-						}));
+						});
+
+						if (folderId != null)
+						{
+							doSave(folderId);
+						}
+						else
+						{
+							this.pickFolder(mode, doSave);
+						}
 					}
 				}
 			}
-		}), mxUtils.bind(this, function()
+		});
+
+		if (urlParams['save-dialog'] == '1')
 		{
-			this.hideDialog();
-		}), mxResources.get('saveAs'), mxResources.get('download'), false, false, allowTab,
-			null, count > 1, rowLimit, data, mimeType, base64Encoded);
-		
-		var height = (this.isServices(count)) ? ((count > 4) ? 390 : 280) : 160;
-		this.showDialog(dlg.container, 420, height, true, true);
-		dlg.init();
+			var disabled = [App.MODE_BROWSER];
+
+			if (!allowTab)
+			{
+				disabled.push('_blank');
+			}
+
+			var dlg = new SaveDialog(this, filename, mxUtils.bind(this, function(input, mode, folderId)
+			{
+				saveFunction(input.value, mode, input, folderId);
+				this.hideDialog();
+			}), disabled, null, 'application/pdf');
+
+			this.showDialog(dlg.container, 420, 100, true, false, mxUtils.bind(this, function()
+			{
+				this.hideDialog();
+			}));
+
+			dlg.init();
+		}
+		else
+		{
+			var count = this.getServiceCount(false);
+			
+			if (isLocalStorage)
+			{
+				count++;
+			}
+			
+			var rowLimit = (count <= 4) ? 2 : (count > 6 ? 4 : 3);
+			
+			var dlg = new CreateDialog(this, filename, saveFunction, mxUtils.bind(this, function()
+			{
+				this.hideDialog();
+			}), mxResources.get('saveAs'), mxResources.get('download'), false, false, allowTab,
+				null, count > 1, rowLimit, data, mimeType, base64Encoded);
+			
+			var height = (this.isServices(count)) ? ((count > 4) ? 390 : 280) : 160;
+			this.showDialog(dlg.container, 420, height, true, true);
+			dlg.init();
+		}
 	};
 
 	/**
@@ -8347,12 +8426,33 @@
 
 		return text;
 	};
-	
+		
+	/**
+	 * Removes all lines starting with %%.
+	 */
+	EditorUi.prototype.removeMermaidComments = function(data)
+	{
+		var lines = data.split('\n');
+		var result = [];
+
+		for (var i = 0; i < lines.length; i++)
+		{
+			if (lines[i].substring(0, 2) != '%%')
+			{
+				result.push(lines[i]);
+			}
+		}
+
+		return result.join('\n');
+	};
+
 	/**
 	 * Generates a Mermaid image.
 	 */
 	EditorUi.prototype.generateMermaidImage = function(data, config, success, error, parseErrorHandler)
 	{
+		data = this.removeMermaidComments(data);
+
 		var onerror = mxUtils.bind(this, function(e)
 		{
 			this.loadingMermaid = false;
@@ -8851,13 +8951,12 @@
 				    		cell = graph.insertVertex(graph.getDefaultParent(), null, '',
 								graph.snap(dx), graph.snap(dy), 1, 1, 'text;whiteSpace=wrap;' + ((html) ? 'html=1;' : ''));
 				    		graph.fireEvent(new mxEventObject('textInserted', 'cells', [cell]));
-						
-							// Converts HTML entities and single tags
-				    		if (html || (text.charAt(0) == '<' && text.indexOf('>') == text.length - 1))
-				    		{
-				    			text = mxUtils.htmlEntities(text);
-				    		}
 							
+							if (html)
+							{
+								text = graph.sanitizeHtml(text);
+							}
+
 				    		//TODO Refuse unsupported file types early as at this stage a lot of processing has beed done and time is wasted. 
 				    		//		For example, 5 MB PDF files is processed and then only 0.5 MB of meaningless text is added!
 				    		//Limit labels to maxTextBytes
@@ -11172,7 +11271,7 @@
 			{
 				var darkMode = false;
 
-				if (window.matchMedia && this.isAutoDarkMode())
+				if (this.isAutoDarkModeSupported() && this.isAutoDarkMode())
 				{
 					darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
 				}
@@ -11189,7 +11288,7 @@
 				}
 			}
 
-			if (window.matchMedia)
+			if (this.isAutoDarkModeSupported())
 			{
 				try
 				{
@@ -13750,6 +13849,14 @@
 	};
 	
 	/**
+	 * Returns true if automatic dark mode is supported.
+	 */
+	EditorUi.prototype.isAutoDarkModeSupported = function()
+	{
+		return window.matchMedia != null;
+	};
+	
+	/**
 	 * Returns the current state of the dark mode.
 	 */
 	EditorUi.prototype.isAutoDarkMode = function(ignoreUrl)
@@ -13794,6 +13901,37 @@
 		return darkStyle;
 	};
 	
+	// Sets instance graph stylesheet
+	EditorUi.setGraphDarkMode = function(graph, container, darkMode)
+	{
+		graph.view.defaultGridColor = darkMode ?
+			mxGraphView.prototype.defaultDarkGridColor : mxGraphView.prototype.defaultGridColor;
+		graph.view.gridColor = graph.view.defaultGridColor;
+		graph.defaultPageBackgroundColor = (urlParams['embedInline'] == '1') ? 'transparent' :
+			darkMode ? Editor.darkColor : '#ffffff';
+		graph.defaultPageBorderColor = darkMode ? '#000000' : '#ffffff';
+		graph.shapeBackgroundColor = darkMode ? Editor.darkColor : '#ffffff';
+		graph.shapeForegroundColor = darkMode ? Editor.lightColor : '#000000';
+		graph.defaultThemeName = darkMode ? 'darkTheme' : 'default-style2';
+		graph.graphHandler.previewColor = darkMode ? '#cccccc' : 'black';
+		mxGraphHandler.prototype.previewColor = graph.graphHandler.previewColor;
+		
+		if (container != null)
+		{
+			container.style.backgroundColor = (urlParams['embedInline'] == '1') ? 'transparent' :
+				(darkMode ? Editor.darkColor : '#ffffff');
+		}
+
+		graph.loadStylesheet();
+
+		// Sets global vars
+		Graph.prototype.defaultPageBackgroundColor = graph.defaultPageBackgroundColor;
+		Graph.prototype.defaultPageBorderColor = graph.defaultPageBorderColor;
+		Graph.prototype.shapeBackgroundColor = graph.shapeBackgroundColor;
+		Graph.prototype.shapeForegroundColor = graph.shapeForegroundColor;
+		Graph.prototype.defaultThemeName = graph.defaultThemeName;
+	};
+
 	/**
 	 * Dynamic change of dark mode.
 	 */
@@ -13808,20 +13946,7 @@
 
 				// Sets instance vars and graph stylesheet
 				this.spinner.opts.color = Editor.isDarkMode() ? '#c0c0c0' : '#000';
-				graph.view.defaultGridColor = Editor.isDarkMode() ?
-					mxGraphView.prototype.defaultDarkGridColor : mxGraphView.prototype.defaultGridColor;
-				graph.view.gridColor = graph.view.defaultGridColor;
-				graph.defaultPageBackgroundColor = (urlParams['embedInline'] == '1') ? 'transparent' :
-					Editor.isDarkMode() ? Editor.darkColor : '#ffffff';
-				graph.defaultPageBorderColor = Editor.isDarkMode() ? '#000000' : '#ffffff';
-				graph.shapeBackgroundColor = Editor.isDarkMode() ? Editor.darkColor : '#ffffff';
-				graph.shapeForegroundColor = Editor.isDarkMode() ? Editor.lightColor : '#000000';
-				graph.defaultThemeName = Editor.isDarkMode() ? 'darkTheme' : 'default-style2';
-				graph.graphHandler.previewColor = Editor.isDarkMode() ? '#cccccc' : 'black';
-				mxGraphHandler.prototype.previewColor = graph.graphHandler.previewColor;
-				document.body.style.backgroundColor = (urlParams['embedInline'] == '1') ? 'transparent' :
-					(Editor.isDarkMode() ? Editor.darkColor : '#ffffff');
-				graph.loadStylesheet();
+				EditorUi.setGraphDarkMode(graph, document.body, Editor.isDarkMode());
 				
 				// Destroys windows with code for dark mode
 				if (this.actions.layersWindow != null)
@@ -13838,7 +13963,7 @@
 					}
 				}
 
-				if (this.menus.commentsWindow != null)
+				if (this.menus != null && this.menus.commentsWindow != null)
 				{
 					this.menus.commentsWindow.window.setVisible(false);
 					this.menus.commentsWindow.destroy();
@@ -13850,14 +13975,16 @@
 					this.ruler.updateStyle();
 				}
 
-				// Sets global vars
-				Graph.prototype.defaultPageBackgroundColor = graph.defaultPageBackgroundColor;
-				Graph.prototype.defaultPageBorderColor = graph.defaultPageBorderColor;
-				Graph.prototype.shapeBackgroundColor = graph.shapeBackgroundColor;
-				Graph.prototype.shapeForegroundColor = graph.shapeForegroundColor;
-				Graph.prototype.defaultThemeName = graph.defaultThemeName;
-				StyleFormatPanel.prototype.defaultStrokeColor = Editor.isDarkMode() ? '#cccccc' : 'black';
-				Format.inactiveTabBackgroundColor = Editor.isDarkMode() ? '#000000' : '#e4e4e4';
+				if (window.StyleFormatPanel != null)
+				{
+					StyleFormatPanel.prototype.defaultStrokeColor = Editor.isDarkMode() ? '#cccccc' : 'black';
+				}
+
+				if (window.Format != null)
+				{
+					Format.inactiveTabBackgroundColor = Editor.isDarkMode() ? '#000000' : '#e4e4e4';
+				}
+
 				mxConstants.DROP_TARGET_COLOR = Editor.isDarkMode() ? '#00ff00' : '#0000FF';
 				Editor.helpImage = (Editor.isDarkMode() && mxClient.IS_SVG) ?
 					Editor.darkHelpImage : Editor.lightHelpImage;
@@ -14556,8 +14683,9 @@
 	/**
 	 * Creates the format panel and adds overrides.
 	 */
-	EditorUi.prototype.pasteXml = function(xml, pasteAsLabel, compat, evt)
+	EditorUi.prototype.pasteXml = function(xml, pasteAsLabel, compat, evt, html)
 	{
+		html = (html != null) ? html : true;
 		var graph = this.editor.graph;
 		var cells = null;
 		
@@ -14622,7 +14750,7 @@
 				}
 			}
 
-			cells = this.insertTextAt(xml, pt.x + dx, pt.y + dx, true);
+			cells = this.insertTextAt(xml, pt.x + dx, pt.y + dx, html);
 			graph.setSelectionCells(cells);
 		}
 		
@@ -14805,7 +14933,7 @@
 						}
 						else
 						{
-							this.pasteXml(xml, pasteAsLabel, compat, evt);
+							this.pasteXml(xml, pasteAsLabel, compat, evt, asHtml);
 						}
 
 						try
