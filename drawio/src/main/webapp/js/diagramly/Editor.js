@@ -4672,6 +4672,7 @@
 
 				if (Object.getOwnPropertyNames != null && Object.getOwnPropertyNames(properties).length > 0)
 				{
+					this.container.appendChild(this.addSpecifications(this.createPanel(), properties, sstate));
 					this.container.appendChild(this.addProperties(this.createPanel(), properties, sstate));
 				}
 			}
@@ -5596,6 +5597,587 @@
 				}
 			}
 			
+			return div;
+		};
+
+		EditorUi.prototype.specificationsCollapsed = false;
+		// 规格面板
+		StyleFormatPanel.prototype.addSpecifications = function(div, properties, state)
+		{
+			var that = this;
+			var graph = this.editorUi.editor.graph;
+			var secondLevel = [];
+			
+			function insertAfter(newElem, curElem)
+			{
+				curElem.parentNode.insertBefore(newElem, curElem.nextSibling);
+			};
+			
+			function applyStyleVal(pName, newVal, prop, delIndex)
+			{
+				graph.getModel().beginUpdate();
+				try
+				{
+					var changedProps = [];
+					var changedVals = [];
+
+					if (prop.index != null)
+					{
+						var allVals = [];
+						var curVal = prop.parentRow.nextSibling;
+						
+						while(curVal && curVal.getAttribute('data-pName') == pName)
+						{
+							allVals.push(curVal.getAttribute('data-pValue'));
+							curVal = curVal.nextSibling;
+						}
+						
+						if (prop.index < allVals.length)
+						{
+							if (delIndex != null)
+							{
+								allVals.splice(delIndex, 1);
+							}
+							else
+							{
+								allVals[prop.index] = newVal;
+							}
+						}
+						else
+						{
+							allVals.push(newVal);
+						}
+						
+						if (prop.size != null && allVals.length > prop.size) //trim the array to the specifies size
+						{
+							allVals = allVals.slice(0, prop.size);
+						}
+						
+						newVal = allVals.join(',');
+						
+						if (prop.countProperty != null)
+						{
+							graph.setCellStyles(prop.countProperty, allVals.length, graph.getSelectionCells());
+							
+							changedProps.push(prop.countProperty);
+							changedVals.push(allVals.length);
+						}
+					}
+
+					graph.setCellStyles(pName, newVal, graph.getSelectionCells());
+					changedProps.push(pName);
+					changedVals.push(newVal);
+					
+					if (prop.dependentProps != null)
+					{
+						for (var i = 0; i < prop.dependentProps.length; i++)
+						{
+							var defVal = prop.dependentPropsDefVal[i];
+							var vals = prop.dependentPropsVals[i];
+							
+							if (vals.length > newVal)
+							{
+								vals = vals.slice(0, newVal);
+							}
+							else
+							{
+								for (var j = vals.length; j < newVal; j++)
+								{
+									vals.push(defVal);
+								}
+							}
+							
+							vals = vals.join(',');
+							graph.setCellStyles(prop.dependentProps[i], vals, graph.getSelectionCells());
+							changedProps.push(prop.dependentProps[i]);
+							changedVals.push(vals);
+						}
+					}
+					
+					if (typeof(prop.onChange) == 'function')
+					{
+						prop.onChange(graph, newVal);
+					}
+					
+					that.editorUi.fireEvent(new mxEventObject('styleChanged', 'keys', changedProps,
+						'values', changedVals, 'cells', graph.getSelectionCells()));
+				}
+				finally
+				{
+					graph.getModel().endUpdate();
+				}
+			}
+			
+			function setElementPos(td, elem, adjustHeight)
+			{
+				var divPos = mxUtils.getOffset(div, true);
+				var pos = mxUtils.getOffset(td, true);
+				elem.style.position = 'absolute';
+				elem.style.left = (pos.x - divPos.x) + 'px';
+				elem.style.top = (pos.y - divPos.y) + 'px';
+				elem.style.width = td.offsetWidth + 'px';
+				elem.style.height = (td.offsetHeight - (adjustHeight? 4 : 0)) + 'px';
+				elem.style.zIndex = 5;
+			};
+			
+			function createColorBtn(pName, pValue, prop)
+			{
+				var clrDiv = document.createElement('div');
+				clrDiv.style.width = '32px';
+				clrDiv.style.height = '4px';
+				clrDiv.style.margin = '2px';
+				clrDiv.style.border = '1px solid black';
+				clrDiv.style.background = !pValue || pValue == 'none'? 'url(\'' + Dialog.prototype.noColorImage + '\')' : pValue;
+
+				btn = mxUtils.button('', mxUtils.bind(that, function(evt)
+				{
+					this.editorUi.pickColor(pValue, function(color)
+					{
+						clrDiv.style.background = color == 'none'? 'url(\'' + Dialog.prototype.noColorImage + '\')' : color;
+						applyStyleVal(pName, color, prop);
+					});
+					mxEvent.consume(evt);
+				}));
+				
+				btn.style.height = '12px';
+				btn.style.width = '40px';
+				btn.className = 'geColorBtn';
+				
+				btn.appendChild(clrDiv);
+				return btn;
+			};
+			
+			function createDynArrList(pName, pValue, subType, defVal, countProperty, myRow, flipBkg)
+			{
+				if (pValue != null)
+				{
+					var vals = pValue.split(',');
+					secondLevel.push({name: pName, values: vals, type: subType, defVal: defVal, countProperty: countProperty, parentRow: myRow, isDeletable: true, flipBkg: flipBkg});
+				}
+				
+				btn = mxUtils.button('+', mxUtils.bind(that, function(evt)
+				{
+					var beforeElem = myRow;
+					var index = 0;
+					
+					while (beforeElem.nextSibling != null)
+					{
+						var cur = beforeElem.nextSibling;
+						var elemPName = cur.getAttribute('data-pName');
+
+						if (elemPName == pName)
+						{
+							beforeElem = beforeElem.nextSibling;
+							index++;
+						}
+						else
+						{
+							break;
+						}
+					}
+					
+					var newProp = {type: subType, parentRow: myRow, index: index, isDeletable: true, defVal: defVal, countProperty: countProperty};
+					var arrItem = createPropertyRow(pName, '', newProp, index % 2 == 0, flipBkg);
+					applyStyleVal(pName, defVal, newProp);
+					insertAfter(arrItem, beforeElem);
+					
+					mxEvent.consume(evt);
+				}));
+				
+				btn.style.height = '16px';
+				btn.style.width = '25px';
+				btn.className = 'geColorBtn';
+				
+				return btn;
+			};
+			
+			function createStaticArrList(pName, pValue, subType, defVal, size, myRow, flipBkg)
+			{
+				if (size > 0)
+				{
+					var vals = new Array(size);
+					
+					var curVals = pValue != null? pValue.split(',') : [];
+					
+					for (var i = 0; i < size; i++) 
+					{
+						vals[i] = curVals[i] != null? curVals[i] : (defVal != null? defVal : '');
+					}
+					
+					secondLevel.push({name: pName, values: vals, type: subType, defVal: defVal, parentRow: myRow, flipBkg: flipBkg, size: size});
+				}
+				
+				return document.createElement('div'); //empty cell
+			};
+			
+			function createCheckbox(pName, pValue, prop)
+			{
+				var input = document.createElement('input');
+				input.type = 'checkbox';
+				input.checked = pValue == '1';
+				
+				mxEvent.addListener(input, 'change', function() 
+				{
+					applyStyleVal(pName, input.checked? '1' : '0', prop);
+				});
+				return input;
+			};
+			
+			function createPropertyRow(pName, pValue, prop, isOdd, flipBkg)
+			{
+				var pDiplayName = prop.dispName;
+				var pType = prop.type;
+				var row = document.createElement('tr');
+				row.className = 'gePropRow' + (flipBkg? 'Dark' : '') + (isOdd? 'Alt' : '') + ' gePropNonHeaderRow';
+				row.setAttribute('data-pName', pName);
+				row.setAttribute('data-pValue', pValue);
+				var rightAlig = false;
+				
+				if (prop.index != null)
+				{
+					row.setAttribute('data-index', prop.index);
+					pDiplayName = (pDiplayName != null? pDiplayName : '') + '[' + prop.index + ']';
+					rightAlig = true;
+				}
+				
+				var td = document.createElement('td');
+				td.className = 'gePropRowCell';
+				var label = mxResources.get(pDiplayName, null, pDiplayName);
+				mxUtils.write(td, label);
+				td.setAttribute('title', label);
+				
+				if (rightAlig)
+				{
+					td.style.textAlign = 'right';
+				}
+					
+				row.appendChild(td);
+				td = document.createElement('td');
+				td.className = 'gePropRowCell';
+				
+				if (pType == 'color')
+				{
+					td.appendChild(createColorBtn(pName, pValue, prop));
+				}
+				else if (pType == 'bool' || pType == 'boolean')
+				{
+					td.appendChild(createCheckbox(pName, pValue, prop));
+				}
+				else if (pType == 'enum')
+				{
+					var pEnumList = prop.enumList;
+					
+					for (var i = 0; i < pEnumList.length; i++)
+					{
+						var op = pEnumList[i];
+						
+						if (op.val == pValue)
+						{
+							mxUtils.write(td, mxResources.get(op.dispName, null, op.dispName));
+							break;
+						}
+					}
+					
+					mxEvent.addListener(td, 'click', mxUtils.bind(that, function()
+					{
+						var select = document.createElement('select');
+						setElementPos(td, select);
+
+						for (var i = 0; i < pEnumList.length; i++)
+						{
+							var op = pEnumList[i];
+							var opElem = document.createElement('option');
+							opElem.value = mxUtils.htmlEntities(op.val);
+							mxUtils.write(opElem, mxResources.get(op.dispName, null, op.dispName));
+							select.appendChild(opElem);
+						}
+						
+						select.value = pValue;
+						
+						div.appendChild(select);
+
+						mxEvent.addListener(select, 'change', function()
+						{
+							var newVal = mxUtils.htmlEntities(select.value);
+							applyStyleVal(pName, newVal, prop);
+							//set value triggers a redraw of the panel which removes the select and updates the row
+						});
+			
+						select.focus();
+
+						//FF calls blur on focus! so set the event after focusing (not with selects but to be safe)
+						mxEvent.addListener(select, 'blur', function()
+						{
+							div.removeChild(select);
+						});
+					}));
+				}
+				else if (pType == 'dynamicArr')
+				{
+					td.appendChild(createDynArrList(pName, pValue, prop.subType, prop.subDefVal, prop.countProperty, row, flipBkg));
+				}
+				else if (pType == 'staticArr')
+				{
+					td.appendChild(createStaticArrList(pName, pValue, prop.subType, prop.subDefVal, prop.size, row, flipBkg));
+				}
+				else if (pType == 'readOnly')
+				{
+					var inp = document.createElement('input');
+					inp.setAttribute('readonly', '');
+					inp.value = pValue;
+					inp.style.width = '96px';
+					inp.style.borderWidth = '0px';
+					td.appendChild(inp);
+				}
+				else
+				{
+					td.innerHTML = mxUtils.htmlEntities(decodeURIComponent(pValue));
+					
+					mxEvent.addListener(td, 'click', mxUtils.bind(that, function()
+					{
+						var input = document.createElement('input');
+						setElementPos(td, input, true);
+						input.value = decodeURIComponent(pValue);
+						input.className = 'gePropEditor';
+						
+						if ((pType == 'int' || pType == 'float') && !prop.allowAuto)
+						{
+							input.type = 'number';
+							input.step = pType == 'int'? '1' : 'any';
+							
+							if (prop.min != null)
+							{
+								input.min = parseFloat(prop.min); 
+							}
+							
+							if (prop.max != null)
+							{
+								input.max = parseFloat(prop.max);
+							}
+						}
+						
+						div.appendChild(input);
+
+						function setInputVal()
+						{
+							var inputVal = input.value;
+							inputVal = inputVal.length == 0 && pType != 'string'? 0 : inputVal;
+							
+							if (prop.allowAuto)
+							{
+								if (inputVal.trim != null && inputVal.trim().toLowerCase() == 'auto')
+								{
+									inputVal = 'auto';
+									pType = 'string';
+								}
+								else
+								{
+									inputVal = parseFloat(inputVal);
+									inputVal = isNaN(inputVal)? 0 : inputVal;
+								}
+							}
+							
+							if (prop.min != null && inputVal < prop.min)
+							{
+								inputVal = prop.min;
+							} 
+							else if (prop.max != null && inputVal > prop.max)
+							{
+								inputVal = prop.max;
+							}
+
+							var newVal = encodeURIComponent((pType == 'int'? parseInt(inputVal) : inputVal) + '');
+							
+							applyStyleVal(pName, newVal, prop);
+						}
+						
+						mxEvent.addListener(input, 'keypress', function(e)
+						{
+							if (e.keyCode == 13) 
+							{
+								setInputVal();
+								//set value triggers a redraw of the panel which removes the input
+							}
+						});
+						
+						input.focus();
+						
+						//FF calls blur on focus! so set the event after focusing
+						mxEvent.addListener(input, 'blur', function() 
+						{
+							setInputVal();
+						});
+					}));
+				}
+
+				if (prop.isDeletable)
+				{
+					var delBtn = mxUtils.button('-', mxUtils.bind(that, function(evt)
+					{
+						//delete the node by refreshing the properties
+						applyStyleVal(pName, '', prop, prop.index);
+						
+						mxEvent.consume(evt);
+					}));
+					
+					delBtn.style.height = '16px';
+					delBtn.style.width = '25px';
+					delBtn.style.float = 'right';
+					delBtn.className = 'geColorBtn';
+					td.appendChild(delBtn);
+				}
+				
+				row.appendChild(td);
+				return row;
+			};
+			
+			div.style.position = 'relative';
+			div.style.padding = '0';
+			var grid = document.createElement('table');
+			grid.className = 'geProperties';
+			grid.style.whiteSpace = 'nowrap';
+			grid.style.width = '100%';
+			//create header row
+			var hrow = document.createElement('tr');
+			hrow.className = 'gePropHeader';
+			var th = document.createElement('th');
+			th.className = 'gePropHeaderCell';
+			var collapseImg = document.createElement('img');
+			collapseImg.src = Sidebar.prototype.expandedImage;
+			collapseImg.style.verticalAlign = 'middle';
+			th.appendChild(collapseImg);
+			mxUtils.write(th, '规格');
+			hrow.style.cursor = 'pointer';
+			
+			var onFold = function()
+			{
+				var rows = grid.querySelectorAll('.gePropNonHeaderRow');
+				var display;
+				
+				if (!that.editorUi.specificationsCollapsed)
+				{
+					collapseImg.src = Sidebar.prototype.expandedImage;
+					display = '';
+				}
+				else
+				{
+					collapseImg.src = Sidebar.prototype.collapsedImage;
+					display = 'none';
+					
+					for (var e = div.childNodes.length - 1; e >= 0 ; e--)
+					{
+						//Blur can be executed concurrently with this method and the element is removed before removing it here
+						try
+						{
+							var child = div.childNodes[e]; 
+							var nodeName = child.nodeName.toUpperCase();
+							
+							if (nodeName == 'INPUT' || nodeName == 'SELECT')
+							{
+								div.removeChild(child);
+							}
+						}
+						catch(ex){}
+					}
+				}
+				
+				for (var r = 0; r < rows.length; r++)
+				{
+					rows[r].style.display = display;
+				}
+			};
+
+			mxEvent.addListener(hrow, 'click', function()
+			{
+				that.editorUi.specificationsCollapsed = !that.editorUi.specificationsCollapsed;
+				onFold();
+			});
+			hrow.appendChild(th);
+			th = document.createElement('th');
+			th.className = 'gePropHeaderCell';
+			th.innerHTML = mxResources.get('value');
+			hrow.appendChild(th);
+			grid.appendChild(hrow);
+			
+			var isOdd = false;
+			var flipBkg = false;
+			
+			var cellId = null;
+			
+			if (state.vertices.length == 1 && state.edges.length == 0)
+			{
+				cellId = state.vertices[0].id;
+			}
+			else if (state.vertices.length == 0 && state.edges.length == 1)
+			{
+				cellId = state.edges[0].id;
+			}
+			
+			//Add it to top (always)
+			if (cellId != null)
+			{
+				grid.appendChild(createPropertyRow('id', mxUtils.htmlEntities(cellId), {dispName: 'ID', type: 'readOnly'}, true, false));
+			}
+			
+			for (var key in properties)
+			{
+				var prop = properties[key];
+				
+				if (typeof(prop.isVisible) == 'function')
+				{
+					if (!prop.isVisible(state, this)) continue;
+				}
+				
+				var pValue = state.style[key] != null? mxUtils.htmlEntities(state.style[key] + '') :
+					((prop.getDefaultValue != null) ? prop.getDefaultValue(state, this) : prop.defVal); //or undefined if defVal is undefined
+
+				if (prop.type == 'separator')
+				{
+					flipBkg = !flipBkg;
+					continue;
+				}
+				else if (prop.type == 'staticArr') //if dynamic values are needed, a more elegant technique is needed to replace such values
+				{
+					prop.size = parseInt(state.style[prop.sizeProperty] || properties[prop.sizeProperty].defVal) || 0;
+				}
+				else if (prop.dependentProps != null)
+				{
+					var dependentProps = prop.dependentProps;
+					var dependentPropsVals = [];
+					var dependentPropsDefVal = [];
+					
+					for (var i = 0; i < dependentProps.length; i++)
+					{
+						var propVal = state.style[dependentProps[i]];
+						dependentPropsDefVal.push(properties[dependentProps[i]].subDefVal);
+						dependentPropsVals.push(propVal != null? propVal.split(',') : []);
+					}
+					
+					prop.dependentPropsDefVal = dependentPropsDefVal;
+					prop.dependentPropsVals = dependentPropsVals;
+				}
+				
+				grid.appendChild(createPropertyRow(key, pValue, prop, isOdd, flipBkg));
+				
+				isOdd = !isOdd;
+			}
+			
+			for (var i = 0; i < secondLevel.length; i++)
+			{
+				var prop = secondLevel[i];
+				var insertElem = prop.parentRow;
+					
+				for (var j = 0; j < prop.values.length; j++)
+				{
+					//mxUtils.clone failed because of the HTM element, so manual cloning is used
+					var iProp = {type: prop.type, parentRow: prop.parentRow, isDeletable: prop.isDeletable, index: j, defVal: prop.defVal, countProperty: prop.countProperty, size: prop.size};
+					var arrItem = createPropertyRow(prop.name, prop.values[j], iProp, j % 2 == 0, prop.flipBkg);
+					insertAfter(arrItem, insertElem);
+					insertElem = arrItem;
+				}
+			}
+
+			div.appendChild(grid);
 			return div;
 		};
 	}
