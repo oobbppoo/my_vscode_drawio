@@ -5643,6 +5643,16 @@ App.prototype.getLibraryStorageHint = function(file)
  */
 App.prototype.restoreLibraries = function()
 {
+	// 从URL导入默认器件库
+	let optBoardLibUrls = [
+		'https://raw.githubusercontent.com/oobbppoo/drawio_shapes/main/%E4%BE%BF%E7%AC%BA%E6%9C%AC.xml',
+		'https://raw.githubusercontent.com/oobbppoo/drawio_shapes/main/object.xml',
+	];
+	for (let i = 0; i < optBoardLibUrls.length; i++)
+	{
+		mxSettings.addCustomLibrary('U' + encodeURIComponent(optBoardLibUrls[i]));
+	}
+
 	var checked = [];
 
 	function addLibs(libs)
@@ -5700,7 +5710,7 @@ App.prototype.loadLibraries = function(libs, done)
 					{
 						if (files[i] != null)
 						{
-							this.loadLibrary(files[i], i <= idx);
+							this.loadLibrary(files[i]); // 所有导入的库都默认展开
 						}
 					}
 				}
